@@ -43,7 +43,7 @@ class SampleSize():
              3.80:0.4999, 3.81:0.4999, 3.82:0.4999, 3.83:0.4999, 3.84:0.4999, 3.85:0.4999, 3.86:0.4999, 3.87:0.4999, 3.88:0.4999, 3.89:0.4999, 
              3.90:0.5000, }
 
-    def finitPopulation(self, population = 0, reliability=99, p=50):
+    def finitePopulation(self, population = 0, reliability=99, p=50):
         if (population > 0):
             if not isinstance(reliability, (int, float)) or reliability <= 0 or reliability > 99:
                 reliability = 99
@@ -98,7 +98,7 @@ def main():
     print('Ingrese la probabilidad de éxito')
     p = int(input('> '))
 
-    sample = sesion.finitPopulation(population, reliability, p)
+    sample = sesion.finitePopulation(population, reliability, p)
     print(sample)
 
 if __name__ == '__main__':
