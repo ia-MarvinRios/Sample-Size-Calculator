@@ -18,7 +18,7 @@ class window(QMainWindow):
         self.layout.setSpacing(0)
 
         self.setWindowTitle("SampleSize Calculator")
-        self.setWindowIcon(QIcon("icon.png"))
+        self.setWindowIcon(QIcon("icon.ico"))
         self.setMinimumSize(400, 500)
         self.setMaximumSize(400, 500)
 
