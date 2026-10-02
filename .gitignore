@@ -1,0 +1,64 @@
+# ───────────── Python ─────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ───────────── Virtual environments ─────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ───────────── Packaging / build (PyInstaller) ─────────────
+build/
+dist/
+*.spec
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+
+# ───────────── Testing / coverage ─────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# ───────────── Qt / PyQt ─────────────
+*.qm
+*.autosave
+*.pro.user
+*.ui.bak
+ui_*.py.bak
+
+# ───────────── IDEs / editors ─────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# ───────────── OS files ─────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ───────────── Logs / temp ─────────────
+*.log
+*.tmp
+*.bak
+
+# ───────────── Environment / secrets ─────────────
+.env
+.env.*
+
+# ───────────── Keep these (assets used by the app) ─────────────
+!icon.ico
+!icon.svg
+!docs/

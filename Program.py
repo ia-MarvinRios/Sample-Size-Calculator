@@ -1,263 +1,400 @@
+import os
 import sys
-from SampleSize import *
-from PyQt6 import sip
+
+from PyQt6.QtCore import Qt, QEvent, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QIntValidator, QIcon
-from PyQt6.QtWidgets import *
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel,
+    QLineEdit, QPushButton, QButtonGroup, QGraphicsOpacityEffect,
+)
 
-class window(QMainWindow):
+from SampleSize import SampleSize
+
+
+def resource_path(relative):
+    """Devuelve la ruta correcta de un recurso, tanto en desarrollo como dentro del .exe de PyInstaller."""
+    base = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    return os.path.join(base, relative)
+
+# ───────────────────────────── PALETA ─────────────────────────────
+BLACK = "#0B0C0E"
+SURFACE = "#15171A"
+SURFACE_2 = "#1C1F23"
+BORDER = "#272B30"
+MINT = "#A8E6CF"
+MINT_HOVER = "#BDF0DC"
+MINT_PRESSED = "#8FD8BB"
+WHITE = "#FFFFFF"
+MUTED = "#8A9099"
+ERROR = "#FF8A8A"
+
+STYLE = f"""
+* {{
+    font-family: 'Segoe UI', 'SF Pro Display', 'Inter', 'Helvetica Neue', sans-serif;
+    color: {WHITE};
+}}
+QWidget#root {{ background-color: {BLACK}; }}
+
+QLabel#title {{ font-size: 20px; font-weight: 600; letter-spacing: 0.3px; }}
+QLabel#subtitle {{ font-size: 12px; color: {MUTED}; }}
+QLabel#fieldLabel {{ font-size: 12px; font-weight: 500; color: {MUTED}; }}
+QLabel#error {{ font-size: 11px; color: {ERROR}; }}
+QLabel#suffix {{ font-size: 14px; color: {MUTED}; background: transparent; }}
+
+/* Segmented controls */
+QFrame#segment {{
+    background-color: {SURFACE};
+    border: 1px solid {BORDER};
+    border-radius: 14px;
+}}
+QPushButton#segBtn {{
+    background: transparent;
+    border: none;
+    border-radius: 11px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: {MUTED};
+}}
+QPushButton#segBtn:hover:!checked {{ color: {WHITE}; }}
+QPushButton#segBtn:checked {{
+    background-color: {MINT};
+    color: {BLACK};
+    font-weight: 600;
+}}
+QPushButton#langBtn {{
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: {MUTED};
+}}
+QPushButton#langBtn:hover:!checked {{ color: {WHITE}; }}
+QPushButton#langBtn:checked {{ background-color: {SURFACE_2}; color: {MINT}; }}
+
+/* Inputs */
+QFrame#field {{
+    background-color: {SURFACE};
+    border: 1px solid {BORDER};
+    border-radius: 12px;
+}}
+QFrame#field[focused="true"] {{ border: 1px solid {MINT}; background-color: {SURFACE_2}; }}
+QFrame#field[invalid="true"] {{ border: 1px solid {ERROR}; }}
+QLineEdit {{
+    background: transparent;
+    border: none;
+    padding: 12px 4px 12px 14px;
+    font-size: 15px;
+    selection-background-color: {MINT};
+    selection-color: {BLACK};
+}}
+
+/* Botón principal */
+QPushButton#primary {{
+    background-color: {MINT};
+    color: {BLACK};
+    border: none;
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+}}
+QPushButton#primary:hover {{ background-color: {MINT_HOVER}; }}
+QPushButton#primary:pressed {{ background-color: {MINT_PRESSED}; }}
+
+/* Resultado */
+QFrame#result {{
+    background-color: {SURFACE};
+    border: 1px solid {BORDER};
+    border-radius: 18px;
+}}
+QLabel#resultCaption {{ font-size: 11px; font-weight: 600; letter-spacing: 1.6px; color: {MUTED}; }}
+QLabel#resultValue {{ font-size: 44px; font-weight: 700; color: {MINT}; }}
+QLabel#resultValue[empty="true"] {{ color: {BORDER}; }}
+"""
+
+# ───────────────────────────── TEXTOS ─────────────────────────────
+TEXTS = {
+    "es": {
+        "title": "Tamaño de Muestra",
+        "subtitle": "Calcula la muestra ideal para tu estudio",
+        "finite": "Finita",
+        "infinite": "Infinita",
+        "population": "Población",
+        "trust": "Nivel de Confianza",
+        "success": "Probabilidad de Éxito",
+        "calculate": "Calcular",
+        "result": "RESULTADO",
+        "invalid_pop": "Población inválida. Ingresa un número mayor a 0.",
+    },
+    "en": {
+        "title": "Sample Size",
+        "subtitle": "Calculate the ideal sample for your study",
+        "finite": "Finite",
+        "infinite": "Infinite",
+        "population": "Population",
+        "trust": "Confidence Level",
+        "success": "Success Probability",
+        "calculate": "Calculate",
+        "result": "RESULT",
+        "invalid_pop": "Invalid population. Enter a number greater than 0.",
+    },
+}
+
+
+# ───────────────────────────── COMPONENTES ─────────────────────────────
+class Field(QWidget):
+    """Campo con etiqueta, sufijo opcional y mensaje de error."""
+
+    def __init__(self, placeholder, suffix="", max_value=2147483647):
+        super().__init__()
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(6)
+
+        self.label = QLabel()
+        self.label.setObjectName("fieldLabel")
+        outer.addWidget(self.label)
+
+        self.frame = QFrame()
+        self.frame.setObjectName("field")
+        row = QHBoxLayout(self.frame)
+        row.setContentsMargins(0, 0, 14, 0)
+        row.setSpacing(0)
+
+        self.edit = QLineEdit()
+        self.edit.setPlaceholderText(placeholder)
+        self.edit.setValidator(QIntValidator(0, max_value))
+        self.edit.installEventFilter(self)
+        row.addWidget(self.edit)
+
+        if suffix:
+            s = QLabel(suffix)
+            s.setObjectName("suffix")
+            row.addWidget(s)
+
+        outer.addWidget(self.frame)
+
+        self.error = QLabel()
+        self.error.setObjectName("error")
+        self.error.hide()
+        outer.addWidget(self.error)
+
+    def eventFilter(self, obj, event):
+        if obj is self.edit:
+            if event.type() == QEvent.Type.FocusIn:
+                self._set_prop("focused", True)
+            elif event.type() == QEvent.Type.FocusOut:
+                self._set_prop("focused", False)
+        return super().eventFilter(obj, event)
+
+    def _set_prop(self, name, value):
+        self.frame.setProperty(name, value)
+        self.frame.style().unpolish(self.frame)
+        self.frame.style().polish(self.frame)
+
+    def set_error(self, message=None):
+        if message:
+            self.error.setText(message)
+            self.error.show()
+            self._set_prop("invalid", True)
+        else:
+            self.error.hide()
+            self._set_prop("invalid", False)
+
+    def value(self):
+        text = self.edit.text().replace(" ", "").replace("-", "").replace("+", "")
+        return int(text) if text else 0
+
+
+def segmented(buttons):
+    """Crea un control segmentado a partir de una lista de botones."""
+    frame = QFrame()
+    frame.setObjectName("segment")
+    lay = QHBoxLayout(frame)
+    lay.setContentsMargins(4, 4, 4, 4)
+    lay.setSpacing(4)
+    group = QButtonGroup(frame)
+    group.setExclusive(True)
+    for b in buttons:
+        b.setCheckable(True)
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
+        group.addButton(b)
+        lay.addWidget(b)
+    return frame, group
+
+
+# ───────────────────────────── VENTANA ─────────────────────────────
+class Window(QWidget):
     def __init__(self):
-        super(window, self).__init__()
-        central_widget = QWidget()
-        self.validator = QIntValidator()
+        super().__init__()
         self.sesion = SampleSize()
-        self.layout = QHBoxLayout()
-        
-        window.setCentralWidget(self, central_widget)
-        central_widget.setLayout(self.layout)
-        self.layout.setContentsMargins(0,0,0,0)
-        self.layout.setSpacing(0)
+        self.lang = "es"
+        self.finite = True
+        self.last_result = None
 
+        self.setObjectName("root")
         self.setWindowTitle("SampleSize Calculator")
-        self.setWindowIcon(QIcon("icon.ico"))
-        self.setMinimumSize(400, 500)
-        self.setMaximumSize(400, 500)
+        self.setWindowIcon(QIcon(resource_path("icon.ico")))
+        self.setFixedSize(420, 700)
+        self.setStyleSheet(STYLE)
 
-        self.I = 1
-        self.G = 1
-        self.finiteLayout()
-    
-    #FUNCIÓN ENCARGADA DE TOMAR LOS DATOS DE LOS LINEEDITS
-    def getData(self):
-        if self.G == 1:
-            if (self.check_input()):
-                data = [self.population.text(), self.trust.text(), self.success.text()]
-                new_data = []
-                for value in data:
-                    value = value.replace(" ", "").replace("-", "").replace("+","")
-                    if value:
-                        value = int(value)
-                        new_data.append(value)
-                    else:
-                        value = 0
-                        new_data.append(value)
+        self._build()
+        self._retranslate()
 
-                    print("NEW ENTRY | ", value, ": ",type(value))
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(28, 24, 28, 28)
+        root.setSpacing(0)
 
-                a, b, c = new_data[0], new_data[1], new_data[2]
+        # Encabezado: idioma
+        top = QHBoxLayout()
+        top.addStretch()
+        self.btn_es, self.btn_en = QPushButton("ES"), QPushButton("EN")
+        for b in (self.btn_es, self.btn_en):
+            b.setObjectName("langBtn")
+        lang_frame, lang_group = segmented([self.btn_es, self.btn_en])
+        lang_frame.setStyleSheet("QFrame#segment { border-radius: 12px; }")
+        self.btn_es.setChecked(True)
+        self.btn_es.clicked.connect(lambda: self._set_lang("es"))
+        self.btn_en.clicked.connect(lambda: self._set_lang("en"))
+        self._lang_group = lang_group
+        top.addWidget(lang_frame)
+        root.addLayout(top)
+        root.addSpacing(12)
 
-                self.label_result.setText(str(round(self.sesion.finitePopulation(a,b,c), 2)))
-            else:
-                pass
+        # Título
+        self.title = QLabel()
+        self.title.setObjectName("title")
+        self.subtitle = QLabel()
+        self.subtitle.setObjectName("subtitle")
+        root.addWidget(self.title)
+        root.addSpacing(2)
+        root.addWidget(self.subtitle)
+        root.addSpacing(22)
 
-        if self.G == 0:
-            if (True):
-                data = [self.trust.text(), self.success.text()]
-                new_data = []
-                for value in data:
-                    value = value.replace(" ", "").replace("-", "").replace("+","")
-                    if value:
-                        value = int(value)
-                        new_data.append(value)
-                    else:
-                        value = 0
-                        new_data.append(value)
+        # Finita / Infinita
+        self.btn_finite, self.btn_infinite = QPushButton(), QPushButton()
+        for b in (self.btn_finite, self.btn_infinite):
+            b.setObjectName("segBtn")
+        mode_frame, mode_group = segmented([self.btn_finite, self.btn_infinite])
+        self.btn_finite.setChecked(True)
+        self.btn_finite.clicked.connect(lambda: self._set_mode(True))
+        self.btn_infinite.clicked.connect(lambda: self._set_mode(False))
+        self._mode_group = mode_group
+        root.addWidget(mode_frame)
+        root.addSpacing(22)
 
-                    print("NEW ENTRY | ", value, ": ",type(value))
+        # Campos
+        self.f_population = Field("0")
+        self.f_trust = Field("99", "%", 100)
+        self.f_success = Field("50", "%", 100)
+        for f in (self.f_population, self.f_trust, self.f_success):
+            f.edit.returnPressed.connect(self.get_data)
 
-                a, b = new_data[0], new_data[1]
+        root.addWidget(self.f_population)
+        root.addSpacing(14)
+        root.addWidget(self.f_trust)
+        root.addSpacing(14)
+        root.addWidget(self.f_success)
+        root.addStretch()
 
-                self.label_result.setText(str(round(self.sesion.infinitePopulation(a,b), 2)))
-    
-    def check_input(self):
-        if self.population.text().replace("-", "").replace("+", "") and int(self.population.text()) > 0:
-            return True
+        # Botón calcular
+        self.btn_calc = QPushButton()
+        self.btn_calc.setObjectName("primary")
+        self.btn_calc.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_calc.clicked.connect(self.get_data)
+        root.addWidget(self.btn_calc)
+        root.addSpacing(18)
+
+        # Resultado
+        self.result_card = QFrame()
+        self.result_card.setObjectName("result")
+        rl = QVBoxLayout(self.result_card)
+        rl.setContentsMargins(20, 18, 20, 20)
+        rl.setSpacing(4)
+        self.result_caption = QLabel()
+        self.result_caption.setObjectName("resultCaption")
+        self.result_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.result_value = QLabel("—")
+        self.result_value.setObjectName("resultValue")
+        self.result_value.setProperty("empty", True)
+        self.result_value.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        rl.addWidget(self.result_caption)
+        rl.addWidget(self.result_value)
+        root.addWidget(self.result_card)
+
+        # Animación de aparición del resultado
+        self._fx = QGraphicsOpacityEffect(self.result_value)
+        self.result_value.setGraphicsEffect(self._fx)
+        self._anim = QPropertyAnimation(self._fx, b"opacity", self)
+        self._anim.setDuration(350)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+    # ───────── Estado ─────────
+    def _set_mode(self, finite):
+        self.finite = finite
+        self.f_population.setVisible(finite)
+        self.f_population.set_error(None)
+        self._reset_result()
+
+    def _set_lang(self, lang):
+        self.lang = lang
+        self._retranslate()
+
+    def _retranslate(self):
+        t = TEXTS[self.lang]
+        self.title.setText(t["title"])
+        self.subtitle.setText(t["subtitle"])
+        self.btn_finite.setText(t["finite"])
+        self.btn_infinite.setText(t["infinite"])
+        self.f_population.label.setText(t["population"])
+        self.f_trust.label.setText(f"{t['trust']} (%)")
+        self.f_success.label.setText(f"{t['success']} (%)")
+        self.btn_calc.setText(t["calculate"].upper())
+        self.result_caption.setText(t["result"])
+        if self.f_population.error.isVisible():
+            self.f_population.error.setText(t["invalid_pop"])
+
+    def _reset_result(self):
+        self.last_result = None
+        self._show_result("—", empty=True)
+
+    def _show_result(self, text, empty=False):
+        self.result_value.setText(text)
+        self.result_value.setProperty("empty", empty)
+        self.result_value.style().unpolish(self.result_value)
+        self.result_value.style().polish(self.result_value)
+        if not empty:
+            self._anim.stop()
+            self._anim.start()
+
+    # ───────── Cálculo ─────────
+    def get_data(self):
+        trust = self.f_trust.value()
+        success = self.f_success.value()
+
+        if self.finite:
+            population = self.f_population.value()
+            if population <= 0:
+                self.f_population.set_error(TEXTS[self.lang]["invalid_pop"])
+                return
+            self.f_population.set_error(None)
+            result = self.sesion.finitePopulation(population, trust, success)
         else:
-            QMessageBox.warning(self, "Error", "INVALID POPULATION\nPOBLACIÓN INVÁLIDA.")
-            return False
-    
-    def createObjects(self):
-        if (hasattr(self, 'frame1') and isinstance(self.frame1, QFrame) or hasattr(self, 'frame2') and isinstance(self.frame2, QFrame)):
-            sip.delete(self.frame1)
-            sip.delete(self.frame2)
+            result = self.sesion.infinitePopulation(trust, success)
 
-        #Establecer los 2 marcos de la ventana
-        self.frame1, self.frame2 = QFrame(), QFrame()
-        
-        #Crear objetos de la ventana
-        self.finit, self.infinite = QPushButton(self.frame1), QPushButton(self.frame1) #Crear los botones de tipo de cálculo
-        self.trust, self.label_trust = QLineEdit(self.frame1), QLabel(self.frame1) #Nivel de confianza
-        self.success, self.label_success = QLineEdit(self.frame1), QLabel(self.frame1) #Probabilidad de éxito
-        self.label_result =  QLabel(self.frame2)
-        self.lang = QPushButton(self.frame2)
-        self.calculate = QPushButton(self.frame1)
+        self.last_result = result
+        self._show_result(f"{round(result, 2):,.2f}")
 
-        #Crear el comboBox y esconderlo
-        self.combo = QComboBox(self.frame2)
-        self.combo.addItem("English")
-        self.combo.addItem("Español")
-        self.combo.hide()
 
-        #Agregar objetos al layout
-        self.layout.addWidget(self.frame1)
-        self.layout.addWidget(self.frame2)
-
-        self.setUpFrames()
-
-    def setUpFrames(self):
-        #Definir el estilo y posición de los frames
-        self.frame1.setGeometry(0,0,200,500)
-        self.frame1.setStyleSheet("background-color: rgb(89, 214, 187);")
-        self.frame2.setGeometry(200,0,200,500)
-        self.frame2.setStyleSheet("background-color: rgb(223, 223, 223);")
-
-        #BOTONES FINITO/INFINITO
-
-        #FINITO
-        self.finit.setGeometry(10,10,50,30)
-        self.finit.setText("Finita")
-        self.finit.setStyleSheet("background-color: white;")
-        #INFINITO
-        self.infinite.setGeometry(140,10,50,30)
-        self.infinite.setText("Infinita")
-        self.infinite.setStyleSheet("background-color: white;")
-
-        #BOTÓN DE IDIOMA
-        self.lang.setGeometry(150,10,40,30)
-        self.lang.setText("LANG")
-
-        #COMBO BOX
-        self.combo.setGeometry(10,10,70,25)
-        self.combo.setStyleSheet("background-color: #fff;")
-
-        #Al presionar los botones dentro de la ventana:
-
-        #Botón de Calcular
-        self.calculate.clicked.connect(self.getData)
-        #Botón finito
-        self.finit.clicked.connect(self.finiteLayout)
-        #Botón infinito
-        self.infinite.clicked.connect(self.infiniteLayout)
-        #Botón de idioma
-        self.lang.clicked.connect(self.toggleComboBox)
-        self.combo.setCurrentIndex(self.I)
-        self.combo.currentIndexChanged.connect(self.changeLang)
-
-    def finiteLayout(self):
-        self.G = 1
-        self.createObjects()
-        self.population, self.label_population = QLineEdit(self.frame1), QLabel(self.frame1) #Población        
-
-        #POBLACIÓN
-        self.population.setGeometry(50,100,100,23)
-        self.population.setStyleSheet("background-color: white;")
-        self.population.setPlaceholderText("0")
-        self.label_population.setGeometry(70,60,150,23)
-        #self.label_population.setText("Población")
-
-        #NIVEL DE CONFIANZA
-        self.trust.setGeometry(50,200,100,23)
-        self.trust.setStyleSheet("background-color: white;")
-        self.trust.setPlaceholderText("99")
-        self.label_trust.setGeometry(40,160,150,23)
-        #self.label_trust.setText("Nivel de Confianza (%)")
-
-        #POSIBILIDAD DE ÉXITOS
-        self.success.setGeometry(50,300,100,23)
-        self.success.setStyleSheet("background-color: white;")
-        self.success.setPlaceholderText("50")
-        self.label_success.setGeometry(35,260,150,23)
-        #self.label_success.setText("Probabilidad de Éxito (%)")
-
-        #BOTON
-        self.calculate.setGeometry(65,350,60,30)
-        self.calculate.setStyleSheet("background-color: white;")
-        #self.calculate.setText("Calcular")
-
-        #RESULTADO
-        self.label_result.setGeometry(75,242,150,25)
-        #self.label_result.setText("RESULTADO")
-
-        self.changeLang()
-
-        #Evitar caracteres no válidos:
-        self.population.setValidator(self.validator)
-        self.trust.setValidator(self.validator)
-        self.success.setValidator(self.validator)
-
-    def infiniteLayout(self):
-        self.G = 0
-        self.createObjects()
-
-        #NIVEL DE CONFIANZA
-        self.trust.setGeometry(50,200,100,23)
-        self.trust.setStyleSheet("background-color: white;")
-        self.trust.setPlaceholderText("99")
-        self.label_trust.setGeometry(40,160,150,23)
-        #self.label_trust.setText("Nivel de Confianza (%)")
-
-        #POSIBILIDAD DE ÉXITOS
-        self.success.setGeometry(50,300,100,23)
-        self.success.setStyleSheet("background-color: white;")
-        self.success.setPlaceholderText("50")
-        self.label_success.setGeometry(35,260,150,23)
-        #self.label_success.setText("Probabilidad de Éxito (%)")
-
-        #BOTON
-        self.calculate.setGeometry(65,350,60,30)
-        self.calculate.setStyleSheet("background-color: white;")
-        #self.calculate.setText("Calcular")
-
-        #RESULTADO
-        self.label_result.setGeometry(75,242,150,25)
-        #self.label_result.setText("RESULTADO")
-
-        self.changeLang()
-
-        #Evitar caracteres no válidos:
-        self.trust.setValidator(self.validator)
-        self.success.setValidator(self.validator)
-    
-    def toggleComboBox(self):
-        if self.combo.isHidden():
-            self.combo.show()
-        else:
-            self.combo.hide()
-    
-    def changeLang(self):
-        if (self.combo.currentIndex() == 0):
-            self.I = 0
-            self.finit.setText("Finite")
-            self.infinite.setText("Infinite")
-
-            self.label_trust.setText("Confidence Level (%)")
-            self.label_success.setText("Success Probability (%)")
-            self.calculate.setText("Calculate")
-            
-            self.label_result.setText("RESULT")
-
-            if (self.G == 1):
-                self.label_population.setText("Population")
-
-        if (self.combo.currentIndex() == 1):
-            self.I = 1
-            self.finit.setText("Finita")
-            self.infinite.setText("Infinita")
-
-            self.label_trust.setText("Nivel de Confianza (%)")
-            self.label_success.setText("Probabilidad de Éxito (%)")
-            self.calculate.setText("Calcular")
-
-            self.label_result.setText("RESULTADO")
-
-            if (self.G == 1):
-                self.label_population.setText("Población")
-
-        else:
-            pass
-
-#EJECUTAR PROGRAMA
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    w = window()
+    w = Window()
     w.show()
     sys.exit(app.exec())
